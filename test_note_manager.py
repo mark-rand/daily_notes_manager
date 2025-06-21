@@ -140,14 +140,31 @@ def test_config_parsing():
     Test that the config file is parsed correctly.
     """
     sample_config = """
-notes
+mon:Put out the: bins
+*:Walk the dog
     """
     with mock.patch("builtins.open", mock.mock_open(read_data=sample_config)):
         parsed_config: NoteManagerConfig = parse_config(
-            "config_file.md", date(2025, 1, 1)
+            "config_file.md", date(2025, 2, 28)  # A Friday
         )
         assert isinstance(parsed_config, NoteManagerConfig)
-        assert parsed_config.task_list_for_day == [(["zzz"], "notes")]
+        assert parsed_config.task_list_for_day == [
+            (
+                [
+                    "2025-02-28",
+                    "2025-03-01",
+                    "2025-03-02",
+                    "2025-03-03",
+                    "2025-03-04",
+                    "2025-03-05",
+                    "2025-03-06",
+                ],
+                "Walk the dog",
+            )
+            (
+                ["2025-03-03"],
+                "Put out the: bins",
+            ),
 
 
 def test_accepts_list_of_note_files():
