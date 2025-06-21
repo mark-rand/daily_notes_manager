@@ -2,11 +2,13 @@
 Test cases for the note_manager module.
 """
 
+from datetime import date
 import os
 from unittest import mock
 import pytest
-from note_manager import get_files, process_notes, process_args
-from note_data_structures import Note
+import note_manager
+from note_manager import get_files, parse_config, process_notes, process_args
+from note_data_structures import Note, NoteManagerConfig
 
 
 def test_process_args_checks_for_notes_home(capsys):
@@ -27,7 +29,7 @@ def test_process_args_with_invalid_directory():
         process_args(["note_manager.py", "invalid_directory"])
 
 
-def test_process_args_with_valid_unwritable_directory(capsys):
+def test_process_args_with_valid_unwritable_directory():
     """
     Test that process_args raises ValueError when the directory is not writable.
     """
@@ -72,6 +74,80 @@ def test_process_directory_gets_config():
                         config_file, other_files = get_files("/doesnt/matter/for/test")
                         assert config_file == "/doesnt/matter/for/test/config.md"
                         assert other_files == ["2025-01-01.md"]
+
+
+def test_get_days_for_pattern():
+    """
+    Test that get_days_for_pattern returns the correct days for a given pattern.
+    """
+    first_january = date(2025, 1, 1)  # Wednesday 1st January 2025
+    all_week = [
+        "2025-01-01",
+        "2025-01-02",
+        "2025-01-03",
+        "2025-01-04",
+        "2025-01-05",
+        "2025-01-06",
+        "2025-01-07",
+    ]
+    assert note_manager.get_days_for_pattern("", first_january) == all_week
+    assert note_manager.get_days_for_pattern("*", first_january) == all_week
+    assert note_manager.get_days_for_pattern("", date(2025, 1, 31)) == [
+        "2025-01-31",
+        "2025-02-01",
+        "2025-02-02",
+        "2025-02-03",
+        "2025-02-04",
+        "2025-02-05",
+        "2025-02-06",
+    ]
+    assert note_manager.get_days_for_pattern("", date(2025, 12, 23)) == [
+        "2025-12-23",
+        "2025-12-24",
+        "2025-12-25",
+        "2025-12-26",
+        "2025-12-27",
+        "2025-12-28",
+        "2025-12-29",
+    ]
+    assert note_manager.get_days_for_pattern("31", date(2025, 1, 31)) == ["2025-01-31"]
+    assert note_manager.get_days_for_pattern("31", date(2025, 12, 25)) == ["2025-12-31"]
+    assert note_manager.get_days_for_pattern("31", date(2025, 12, 23)) == []
+    assert note_manager.get_days_for_pattern("01", date(2025, 12, 26)) == ["2026-01-01"]
+    assert note_manager.get_days_for_pattern("1231", first_january) == []
+    assert note_manager.get_days_for_pattern("0101,mon,26", first_january) == [
+        "2025-01-01",
+        "2025-01-06",
+    ]
+    assert note_manager.get_days_for_pattern("1225", date(2025, 12, 25)) == [
+        "2025-12-25"
+    ]
+    assert note_manager.get_days_for_pattern("1225", date(2025, 12, 24)) == [
+        "2025-12-25"
+    ]
+    assert note_manager.get_days_for_pattern("1225", first_january) == []
+    assert note_manager.get_days_for_pattern("20250102,0101", first_january) == [
+        "2025-01-01",
+        "2025-01-02",
+    ]
+    assert note_manager.get_days_for_pattern(
+        "sat,21,0621,mon,wed", date(2025, 6, 21)
+    ) == ["2025-06-21", "2025-06-23", "2025-06-25"]
+
+
+def test_config_parsing():
+    """
+    Test that the config file is parsed correctly.
+    """
+    sample_config = """
+notes
+    """
+    with mock.patch("builtins.open", mock.mock_open(read_data=sample_config)):
+        parsed_config: NoteManagerConfig = parse_config(
+            "config_file.md", date(2025, 1, 1)
+        )
+        assert isinstance(parsed_config, NoteManagerConfig)
+        assert parsed_config.task_list_for_day == [(["zzz"], "notes")]
 
 
 def test_accepts_list_of_note_files():
