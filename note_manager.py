@@ -4,10 +4,10 @@
 This script processes the notes in a specified directory.
 """
 
-from note_data_structures import Note
 import sys
 import os
 import re
+from note_data_structures import Note
 
 
 def process_notes(notes: list[Note]) -> list[Note]:
@@ -24,7 +24,7 @@ def process_notes(notes: list[Note]) -> list[Note]:
     return [note for note in notes if isinstance(note, Note)]
 
 
-def process_args(command_line_args: list[str]) -> None:
+def process_args(command_line_args: list[str]) -> str | None:
     """
     Main function to process notes in the specified directory.
     """
@@ -32,34 +32,35 @@ def process_args(command_line_args: list[str]) -> None:
         print("Usage: python note_manager.py <notes_home>")
         return
 
-    notes_home = command_line_args[1]
-    if not os.path.isdir(notes_home):
-        raise ValueError(f"invalid directory: '{notes_home}'")
-    if not os.access(notes_home, os.W_OK):
-        raise ValueError(f"no write access to directory: '{notes_home}'")
-    print(f"Processing home directory: {notes_home}")
-    return notes_home
+    notes_dir = command_line_args[1]
+    if not os.path.isdir(notes_dir):
+        raise ValueError(f"invalid directory: '{notes_dir}'")
+    if not os.access(notes_dir, os.W_OK):
+        raise ValueError(f"no write access to directory: '{notes_dir}'")
+    print(f"Processing home directory: {notes_dir}")
+    return notes_dir
 
 
-def get_files(notes_home: str) -> tuple[str, list[str]]:
+def get_files(notes_directory: str) -> tuple[str, list[str]]:
     """
     Gets the configuration file and other files in the notes home directory.
     """
-    config_file = os.path.join(notes_home, "config.md")
+    config_path = os.path.join(notes_directory, "config.md")
     if (
-        not os.path.isfile(config_file)
-        or not os.path.exists(config_file)
-        or not os.access(config_file, os.R_OK)
+        not os.path.isfile(config_path)
+        or not os.path.exists(config_path)
+        or not os.access(config_path, os.R_OK)
     ):
         raise FileNotFoundError(
-            f"Config file not found or inaccessible: '{config_file}'"
+            f"Config file not found or inaccessible: '{config_path}'"
         )
-    other_files = [
-        f for f in os.listdir(notes_home) if re.match(r"\d{4}-\d{2}-\d{2}\.md$", f)
+    filtered_note_files = [
+        f for f in os.listdir(notes_directory) if re.match(r"\d{4}-\d{2}-\d{2}\.md$", f)
     ]
-    return config_file, other_files
+    return config_path, filtered_note_files
 
 
 if __name__ == "__main__":
     notes_home = process_args(sys.argv)
-    config_file, other_files = get_files(notes_home)
+    if notes_home:
+        config_file, note_files = get_files(notes_home)
