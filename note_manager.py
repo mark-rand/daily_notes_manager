@@ -4,11 +4,24 @@
 This script processes the notes in a specified directory.
 """
 
+from datetime import date, timedelta
+from enum import StrEnum, auto
 import sys
 import os
 import re
 from note_data_structures import Note, NoteManagerConfig
-from datetime import date, timedelta
+
+ARCHIVE_HOME = "archive"
+BACKUP_HOME = "backup"
+
+
+class CurrentSection(StrEnum):
+    """
+    Enum to represent the current section of the note while being processed.
+    """
+
+    TASKS = auto()
+    OTHER = auto()
 
 
 def process_notes(notes: list[Note]) -> list[Note]:
@@ -64,20 +77,30 @@ def get_files(notes_directory: str) -> tuple[str, list[str]]:
 def get_days_for_pattern(pattern: str, today_date: date) -> list[str]:
     """
     Returns a list of dates in YYYY-MM-DD format for the given pattern.
+    Tasks work like this: the config will hold each task and the dates that
+    it is relevant for (in YYYY-MM-DD format).
+    The criteria for a task can be any of these in a comma-separated list:
+    * / blank - No specific date (every day)
+    MMDD - relevant for the month and day, regardless of the year
+    DD - relevant for the day of the month, regardless of the month and year
+    mon, tue, wed, thu, fri, sat, sun (case insensitive) - relevant for the day of the week
     """
     all_week_as_string = [
         dd.strftime("%Y-%m-%d")
         for dd in [today_date + timedelta(days=i) for i in range(7)]
     ]
     if not pattern or pattern == "*":
-        # All days by default
         return all_week_as_string
     matched_days: set[str] = set()
     for sub_pattern in pattern.split(","):
         sub_pattern = sub_pattern.strip().lower()
         if re.match(r"^\d{8}$", sub_pattern):
-            formatted_pattern = f"{sub_pattern[:4]}-{sub_pattern[4:6]}-{sub_pattern[6:]}"
-            matched_days.update([d for d in all_week_as_string if d == formatted_pattern])
+            formatted_pattern = (
+                f"{sub_pattern[:4]}-{sub_pattern[4:6]}-{sub_pattern[6:]}"
+            )
+            matched_days.update(
+                [d for d in all_week_as_string if d == formatted_pattern]
+            )
         elif re.match(r"^\d{2}$", sub_pattern):
             # Day of the month
             matched_days.update(
@@ -106,22 +129,144 @@ def parse_config(config_file_location: str, today_date: date) -> NoteManagerConf
         NoteManagerConfig: The parsed configuration.
     """
     task_list_for_day: list[tuple[list[str], str]] = []
-    # Tasks work like this: the config will hold each task and the dates that
-    # it is relevant for (in YYYY-MM-DD format).
-    # The criteria for a task can be any of these in a comma-separated list:
-    # - No specific date (always relevant)
-    # MMDD - relevant for the month and day, regardless of the year
-    # DD - relevant for the day of the month, regardless of the month and year
-    # mon, tue, wed, thu, fri, sat, sun (case insensitive) - relevant for the day of the week
     with open(config_file_location, "r", encoding="utf-8") as file:
+        current_section = CurrentSection.OTHER
+        sections: list[tuple[str, str]] = []
+        current_section_name = ""
+        current_section_content = []
+        processed_first_section = False
         for line in file:
-            if line.strip():
-                task_list_for_day.append((["zzz"], line.strip()))
-    config: NoteManagerConfig = NoteManagerConfig(task_list_for_day)
+            line = line.strip() if line else ""
+            if line:
+                if line.startswith("#"):
+                    if processed_first_section:
+                        sections.append(
+                            (current_section_name, "\n".join(current_section_content))
+                        )
+                    else:
+                        processed_first_section = True
+                    current_section_name = line
+                    current_section_content = []
+                    current_section = CurrentSection.OTHER
+                    if current_section_name.lower().find("tasks") != -1:
+                        current_section = CurrentSection.TASKS
+                else:
+                    if current_section == CurrentSection.OTHER:
+                        current_section_content.append(line)
+                    elif current_section == CurrentSection.TASKS:
+                        # Process task lines
+                        parts = line.split(":", 1)
+                        if len(parts) == 2:
+                            date_pattern, task = parts[0].strip(), parts[1].strip()
+                        else:
+                            date_pattern, task = "", line
+                        task_list_for_day.append(
+                            (get_days_for_pattern(date_pattern, today_date), task)
+                        )
+    sections.append((current_section_name, "\n".join(current_section_content)))
+    config: NoteManagerConfig = NoteManagerConfig(task_list_for_day, sections)
     return config
 
 
-if __name__ == "__main__":
+def output_tasks_for_day(config: NoteManagerConfig, day: str) -> list[str]:
+    """
+    Outputs the tasks for a specific day based on the configuration.
+
+    Args:
+        config (NoteManagerConfig): The configuration object.
+        day (str): The day in YYYY-MM-DD format.
+
+    Returns:
+        list[str]: A list of tasks for the specified day.
+    """
+    tasks_for_day = []
+    for task_dates, task in config.task_list_for_day:
+        if day in task_dates:
+            tasks_for_day.append("[ ] " + task)
+    return tasks_for_day
+
+
+def directory_check(notes_home: str) -> None:
+    """
+    Checks if the archive and backup directorys exist and creates them if not.
+
+    Args:
+        notes_home (str): The path to the notes home directory.
+    """
+    for subdir in [ARCHIVE_HOME, BACKUP_HOME]:
+        subdir_path = os.path.join(notes_home, subdir)
+        if not os.path.exists(subdir_path):
+            print(f"Creating directory: {subdir_path}")
+            os.makedirs(subdir_path)
+
+
+def process_single_file_before_archiving(note_file: str, notes_home: str) -> set[str]:
+    """
+    Processes a single note file before archiving it.
+    Returns:
+        set[str]: A set of tasks that have not been completed.
+    """
+    print(f"Processing file: {note_file} before archiving")
+    incomplete_tasks: set[str] = set()
+    new_lines = []
+    with open(os.path.join(notes_home, note_file), "r", encoding="utf-8") as file:
+        for line in file:
+            if line.strip().endswith("(delete_if_not_entered)"):
+                continue
+            new_lines.append(line)
+            line = line.strip()
+            match = re.match(r"^(\*|-)\s\[\s\]\s(.+)", line)
+            if match:
+                task = match.group(2).strip()
+                incomplete_tasks.add(task)
+            elif re.match(r"^(\*|-)\s\[x\]\s", line, re.IGNORECASE):
+                continue
+    with open(
+        os.path.join(notes_home, ARCHIVE_HOME, note_file), "w", encoding="utf-8"
+    ) as archive_file:
+        print(f"Archiving {note_file} to {os.path.join(notes_home, ARCHIVE_HOME)}")
+        archive_file.write("".join(new_lines))
+    return incomplete_tasks
+
+
+def process_old(
+    note_files: list[str],
+    notes_home: str,
+    today_date: date,
+) -> None:
+    """
+    Processes old notes, deleting unused lines and gathering tasks that have not been completed.
+
+    Args:
+        note_files (list[str]): List of note files to process.
+        notes_home (str): The path to the notes home directory.
+        today_date (date): Today's date as a datetime.date object.
+
+    """
+    todays_date_str = today_date.strftime("%Y-%m-%d")
+    for note_file in note_files:
+        if note_file < todays_date_str:
+            file_path = os.path.join(notes_home, note_file)
+            process_single_file_before_archiving(note_file, notes_home)
+            # todo - handle exceptions
+            os.rename(
+                file_path,
+                os.path.join(notes_home, BACKUP_HOME, note_file)
+            )
+
+
+def main() -> None:
+    """
+    Main function to run the note manager.
+    """
     notes_home = process_args(sys.argv)
     if notes_home:
         config_file, note_files = get_files(notes_home)
+        parsed_config: NoteManagerConfig = parse_config(config_file, date.today())
+        print(f"Parsed configuration: {parsed_config}")
+        directory_check(notes_home)
+        process_old(note_files, notes_home, date.today())
+
+
+if __name__ == "__main__":
+    main()

@@ -140,6 +140,11 @@ def test_config_parsing():
     Test that the config file is parsed correctly.
     """
     sample_config = """
+# Diary
+Write about my day here
+# Another section
+Write something else here
+# Tasks
 mon:Put out the: bins
 *:Walk the dog
     """
@@ -149,6 +154,10 @@ mon:Put out the: bins
         )
         assert isinstance(parsed_config, NoteManagerConfig)
         assert parsed_config.task_list_for_day == [
+            (
+                ["2025-03-03"],
+                "Put out the: bins",
+            ),
             (
                 [
                     "2025-02-28",
@@ -160,11 +169,102 @@ mon:Put out the: bins
                     "2025-03-06",
                 ],
                 "Walk the dog",
-            )
-            (
-                ["2025-03-03"],
-                "Put out the: bins",
             ),
+        ]
+        assert parsed_config.sections == [
+            ("# Diary", "Write about my day here"),
+            ("# Another section", "Write something else here"),
+            ("# Tasks", ""),
+        ]
+
+def test_output_tasks_for_day():
+    """
+    Test that the output of tasks for a specific day is correct.
+    """
+    sample_config = NoteManagerConfig(
+        task_list_for_day=[
+            (["2025-01-01"], "Task 1"),
+            (["2025-01-02"], "Task 2"),
+            (["2025-01-01", "2025-01-31"], "Task 3"),
+        ],
+        sections=[],
+    )
+    tasks = note_manager.output_tasks_for_day(sample_config, "2025-01-01")
+    assert tasks == ["[ ] Task 1", "[ ] Task 3"]
+
+def test_archive_and_backup_directories_exist():
+    """
+    Test that the archive and backup directories are created if they do not exist.
+    """
+    BASE_DIR = "/doesnt/matter/for/test"
+    with mock.patch("os.path.exists", return_value=False):
+        with mock.patch("os.makedirs") as mock_makedirs:
+            note_manager.directory_check(BASE_DIR)
+            assert mock_makedirs.call_count == 2
+    with mock.patch("os.path.exists", return_value=True):
+        with mock.patch("os.makedirs") as mock_makedirs:
+            note_manager.directory_check(BASE_DIR)
+            mock_makedirs.assert_not_called()
+
+
+def test_process_single_file_before_archiving():
+    """
+    The notes manager processes a file then writes the filtered version to the archive
+    directory. 
+    """
+    note_file = "2025-01-01.md"
+    contents_before_processing = """
+# Title
+Content
+#thoughtoftheday (delete_if_not_entered)
+# Tasks
+- [ ] Task 1
+- [x] Task 2
+* [ ] Task 3
+"""
+    with mock.patch("builtins.open") as mock_file_open:
+        write_mock_return_value = mock.mock_open().return_value
+        mock_file_open.side_effect = [
+            mock.mock_open(read_data=contents_before_processing).return_value,
+            write_mock_return_value,
+        ]
+        incomplete_tasks: set[str] = note_manager.process_single_file_before_archiving(note_file, "/doesnt/matter/for/test/")
+        assert mock_file_open.call_count == 2
+        assert mock_file_open.call_args_list[0][0] == (
+            os.path.join("/doesnt/matter/for/test", note_file), "r"
+        )
+        assert mock_file_open.call_args_list[0][1] == {"encoding": "utf-8"}
+        assert incomplete_tasks == {"Task 1", "Task 3"}
+        assert len(mock_file_open.mock_calls) == 2
+        assert write_mock_return_value.write.call_count == 1
+        assert write_mock_return_value.write.call_args[0][0] == """
+# Title
+Content
+# Tasks
+- [ ] Task 1
+- [x] Task 2
+* [ ] Task 3
+"""
+
+
+def test_process_old_notes():
+    """
+    We want to go through the old notes, delete any unused lines and gather up
+    and tasks which have not been completed.
+    """
+    note_files = [
+        "2025-01-01.md",
+        "2025-01-02.md",
+        "2025-01-03.md",
+        "2025-01-04.md",
+    ]
+    with mock.patch("os.rename") as mock_rename:
+        with mock.patch("note_manager.process_single_file_before_archiving") as mock_process_single_file:
+            note_manager.process_old(note_files, "/doesnt/matter/for/test", date(2025, 1, 3))
+            assert mock_rename.call_count == 2
+            assert mock_rename.call_args_list[0][0][0] == os.path.join("/doesnt/matter/for/test", "2025-01-01.md")
+            assert mock_rename.call_args_list[1][0][0] == os.path.join("/doesnt/matter/for/test", "2025-01-02.md")
+            assert mock_process_single_file.call_count == 2
 
 
 def test_accepts_list_of_note_files():

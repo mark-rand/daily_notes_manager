@@ -9,6 +9,9 @@ class NoteManagerConfig:
     """
 
     task_list_for_day: list[tuple[list[str], str]]
+    sections: list[tuple[str, str]] 
+
+
 @dataclass
 class Note:
     """
