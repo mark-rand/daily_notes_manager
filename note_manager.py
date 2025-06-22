@@ -247,12 +247,15 @@ def process_old(
     for note_file in note_files:
         if note_file < todays_date_str:
             file_path = os.path.join(notes_home, note_file)
-            process_single_file_before_archiving(note_file, notes_home)
-            # todo - handle exceptions
-            os.rename(
-                file_path,
-                os.path.join(notes_home, BACKUP_HOME, note_file)
-            )
+            try:
+                process_single_file_before_archiving(note_file, notes_home)
+                os.rename(
+                    file_path,
+                    os.path.join(notes_home, BACKUP_HOME, note_file)
+                )
+            except Exception as e:  # pylint: disable=broad-except
+                print(f"Error processing file {note_file}: {e}")
+                sys.exit(1)
 
 
 def main() -> None:

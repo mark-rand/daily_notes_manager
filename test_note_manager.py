@@ -266,6 +266,20 @@ def test_process_old_notes():
             assert mock_rename.call_args_list[1][0][0] == os.path.join("/doesnt/matter/for/test", "2025-01-02.md")
             assert mock_process_single_file.call_count == 2
 
+def test_process_old_notes_fails_on_exception():
+    """
+    If an exception occurs during processing, we want to ensure that the
+    process_old function does not fail silently and that the exception is raised.
+    """
+    note_files = [
+        "1605-11-05.md",
+    ]
+    with mock.patch("note_manager.process_single_file_before_archiving") as mock_process_single_file:
+        with mock.patch("sys.exit") as mock_exit:
+            mock_process_single_file.side_effect = Exception("Processing failed")
+            note_manager.process_old(note_files, "/doesnt/matter/for/test", date(2025, 1, 3))
+            mock_exit.assert_called_once_with(1)
+
 
 def test_accepts_list_of_note_files():
     note1 = Note()
