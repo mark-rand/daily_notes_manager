@@ -233,7 +233,7 @@ def process_old(
     note_files: list[str],
     notes_home: str,
     today_date: date,
-) -> None:
+) -> set[str]:
     """
     Processes old notes, deleting unused lines and gathering tasks that have not been completed.
 
@@ -243,12 +243,13 @@ def process_old(
         today_date (date): Today's date as a datetime.date object.
 
     """
+    incomplete_tasks: set[str] = set()
     todays_date_str = today_date.strftime("%Y-%m-%d")
     for note_file in note_files:
         if note_file < todays_date_str:
             file_path = os.path.join(notes_home, note_file)
             try:
-                process_single_file_before_archiving(note_file, notes_home)
+                incomplete_tasks.update(process_single_file_before_archiving(note_file, notes_home))
                 os.rename(
                     file_path,
                     os.path.join(notes_home, BACKUP_HOME, note_file)
@@ -256,6 +257,7 @@ def process_old(
             except Exception as e:  # pylint: disable=broad-except
                 print(f"Error processing file {note_file}: {e}")
                 sys.exit(1)
+    return incomplete_tasks
 
 
 def main() -> None:
@@ -268,7 +270,7 @@ def main() -> None:
         parsed_config: NoteManagerConfig = parse_config(config_file, date.today())
         print(f"Parsed configuration: {parsed_config}")
         directory_check(notes_home)
-        process_old(note_files, notes_home, date.today())
+        incomplete_tasks: set[str] = process_old(note_files, notes_home, date.today())
 
 
 if __name__ == "__main__":
