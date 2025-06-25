@@ -1,3 +1,4 @@
+# pylint: disable=too-many-args
 """
 Test cases for the note_manager module.
 """
@@ -7,7 +8,7 @@ import os
 from unittest import mock
 import pytest
 import note_manager
-from note_manager import get_files, parse_config, process_notes, process_args
+from note_manager import get_files, parse_config, process_args
 from note_data_structures import Note, NoteManagerConfig
 
 
@@ -177,6 +178,7 @@ mon:Put out the: bins
             ("# Tasks", ""),
         ]
 
+
 def test_output_tasks_for_day():
     """
     Test that the output of tasks for a specific day is correct.
@@ -191,6 +193,7 @@ def test_output_tasks_for_day():
     )
     tasks = note_manager.output_tasks_for_day(sample_config, "2025-01-01")
     assert tasks == ["[ ] Task 1", "[ ] Task 3"]
+
 
 def test_archive_and_backup_directories_exist():
     """
@@ -210,7 +213,7 @@ def test_archive_and_backup_directories_exist():
 def test_process_single_file_before_archiving():
     """
     The notes manager processes a file then writes the filtered version to the archive
-    directory. 
+    directory.
     """
     note_file = "2025-01-01.md"
     contents_before_processing = """
@@ -228,16 +231,21 @@ Content
             mock.mock_open(read_data=contents_before_processing).return_value,
             write_mock_return_value,
         ]
-        incomplete_tasks: set[str] = note_manager.process_single_file_before_archiving(note_file, "/doesnt/matter/for/test/")
+        incomplete_tasks: set[str] = note_manager.process_single_file_before_archiving(
+            note_file, "/doesnt/matter/for/test/"
+        )
         assert mock_file_open.call_count == 2
         assert mock_file_open.call_args_list[0][0] == (
-            os.path.join("/doesnt/matter/for/test", note_file), "r"
+            os.path.join("/doesnt/matter/for/test", note_file),
+            "r",
         )
         assert mock_file_open.call_args_list[0][1] == {"encoding": "utf-8"}
         assert incomplete_tasks == {"Task 1", "Task 3"}
         assert len(mock_file_open.mock_calls) == 2
         assert write_mock_return_value.write.call_count == 1
-        assert write_mock_return_value.write.call_args[0][0] == """
+        assert (
+            write_mock_return_value.write.call_args[0][0]
+            == """
 # Title
 Content
 # Tasks
@@ -245,6 +253,7 @@ Content
 - [x] Task 2
 * [ ] Task 3
 """
+        )
 
 
 def test_process_old_notes():
@@ -259,12 +268,21 @@ def test_process_old_notes():
         "2025-01-04.md",
     ]
     with mock.patch("os.rename") as mock_rename:
-        with mock.patch("note_manager.process_single_file_before_archiving") as mock_process_single_file:
-            note_manager.process_old(note_files, "/doesnt/matter/for/test", date(2025, 1, 3))
+        with mock.patch(
+            "note_manager.process_single_file_before_archiving"
+        ) as mock_process_single_file:
+            note_manager.process_old(
+                note_files, "/doesnt/matter/for/test", date(2025, 1, 3)
+            )
             assert mock_rename.call_count == 2
-            assert mock_rename.call_args_list[0][0][0] == os.path.join("/doesnt/matter/for/test", "2025-01-01.md")
-            assert mock_rename.call_args_list[1][0][0] == os.path.join("/doesnt/matter/for/test", "2025-01-02.md")
+            assert mock_rename.call_args_list[0][0][0] == os.path.join(
+                "/doesnt/matter/for/test", "2025-01-01.md"
+            )
+            assert mock_rename.call_args_list[1][0][0] == os.path.join(
+                "/doesnt/matter/for/test", "2025-01-02.md"
+            )
             assert mock_process_single_file.call_count == 2
+
 
 def test_process_old_notes_fails_on_exception():
     """
@@ -274,14 +292,84 @@ def test_process_old_notes_fails_on_exception():
     note_files = [
         "1605-11-05.md",
     ]
-    with mock.patch("note_manager.process_single_file_before_archiving") as mock_process_single_file:
+    with mock.patch(
+        "note_manager.process_single_file_before_archiving"
+    ) as mock_process_single_file:
         with mock.patch("sys.exit") as mock_exit:
             mock_process_single_file.side_effect = Exception("Processing failed")
-            note_manager.process_old(note_files, "/doesnt/matter/for/test", date(2025, 1, 3))
+            note_manager.process_old(
+                note_files, "/doesnt/matter/for/test", date(2025, 1, 3)
+            )
             mock_exit.assert_called_once_with(1)
 
 
-def test_accepts_list_of_note_files():
-    note1 = Note()
-    notes_to_write = process_notes([note1])
-    assert isinstance(notes_to_write, list)
+def test_incomplete_tasks_are_written_to_file():
+    """
+    Test that incomplete tasks are written to the file correctly.
+    """
+    incomplete_tasks = {"Task 1", "Task 3"}
+    with mock.patch("builtins.open", mock.mock_open()) as mock_file_open:
+        note_manager.write_incomplete_tasks_to_file(
+            incomplete_tasks, "/doesnt/matter/for/test/", date(2025, 6, 7)
+        )
+        mock_file_open.assert_called_once_with(
+            "/doesnt/matter/for/test/incomplete_tasks.md", "w", encoding="utf-8"
+        )
+        mock_file_open().write.assert_called_once_with(
+            """Incomplete task list updated on 7/6/2025:
+
+- [ ] Task 1
+- [ ] Task 3
+"""
+        )
+
+
+def test_create_this_weeks_files():
+    """
+    Test that create_this_weeks_files creates files for the current week.
+    """
+    fake_config = NoteManagerConfig(
+        task_list_for_day=[],
+        sections=[],
+    )
+    with mock.patch("note_manager.create_file_for_day") as mock_create_file:
+        with mock.patch("os.path.exists", return_value=False) as mock_file_exists:
+            note_manager.create_this_weeks_files(
+                "/doesnt/matter/for/test", set(), fake_config, date(2025, 2, 27)
+            )
+            assert mock_create_file.call_count == 7
+            assert (
+                mock_file_exists.assert_called_once
+            )  # Only care about today's file - we can overwrite future ones
+            assert (
+                mock_file_exists.call_args[0][0]
+                == "/doesnt/matter/for/test/2025-02-27.md"
+            )
+    with mock.patch("note_manager.create_file_for_day") as mock_create_file:
+        with mock.patch("os.path.exists", return_value=True) as mock_file_exists:
+            note_manager.create_this_weeks_files(
+                "/doesnt/matter/for/test", set(), fake_config, date(2025, 1, 1)
+            )
+            assert (
+                mock_create_file.call_count == 6
+            )  # We don't create today's file if it already exists
+            assert mock_file_exists.assert_called_once
+
+def test_create_file_for_day():
+    """
+    Test that create_file_for_day creates a file for the specified day.
+    """
+    fake_config = NoteManagerConfig(
+        task_list_for_day=[],
+        sections=[],
+    )
+    with mock.patch("builtins.open", mock.mock_open()) as mock_file_open:
+        note_manager.create_file_for_day(
+            "/doesnt/matter/for/test", set(), fake_config, date(2025, 2, 27)
+        )
+        mock_file_open.assert_called_once_with(
+            "/doesnt/matter/for/test/2025-02-27.md", "w", encoding="utf-8"
+        )
+        mock_file_open().write.assert_called_once_with(
+            "# 27/02/2025\n\n# Tasks\n\n# Diary\n\n# Another section\n"
+        )

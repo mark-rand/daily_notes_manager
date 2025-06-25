@@ -24,20 +24,6 @@ class CurrentSection(StrEnum):
     OTHER = auto()
 
 
-def process_notes(notes: list[Note]) -> list[Note]:
-    """
-    Processes a list of Note objects and returns a list of notes to write.
-
-    Args:
-        notes (list): A list of Note objects.
-
-    Returns:
-        list: A list of notes to write.
-    """
-    # Assuming Note has a method to get the content or representation
-    return [note for note in notes if isinstance(note, Note)]
-
-
 def process_args(command_line_args: list[str]) -> str | None:
     """
     Main function to process notes in the specified directory.
@@ -249,15 +235,66 @@ def process_old(
         if note_file < todays_date_str:
             file_path = os.path.join(notes_home, note_file)
             try:
-                incomplete_tasks.update(process_single_file_before_archiving(note_file, notes_home))
-                os.rename(
-                    file_path,
-                    os.path.join(notes_home, BACKUP_HOME, note_file)
+                incomplete_tasks.update(
+                    process_single_file_before_archiving(note_file, notes_home)
                 )
+                os.rename(file_path, os.path.join(notes_home, BACKUP_HOME, note_file))
             except Exception as e:  # pylint: disable=broad-except
                 print(f"Error processing file {note_file}: {e}")
                 sys.exit(1)
     return incomplete_tasks
+
+
+def write_incomplete_tasks_to_file(
+    incomplete_tasks: set[str],
+    notes_home: str,
+    today_date: date,
+) -> None:
+    """
+    Writes the incomplete tasks to a file in the notes home directory.
+
+    Args:
+        incomplete_tasks (set[str]): Set of incomplete tasks.
+        notes_home (str): The path to the notes home directory.
+        today_date (date): Today's date as a datetime.date object.
+    """
+    file_path = os.path.join(notes_home, "incomplete_tasks.md")
+    incomplete_task_document = f"Incomplete task list updated on {today_date.day}/{today_date.month}/{today_date.year}:\n\n"
+    if incomplete_tasks:
+        for task in sorted(incomplete_tasks):
+            incomplete_task_document += f"- [ ] {task}\n"
+    else:
+        incomplete_task_document += "No incomplete tasks found.\n"
+    with open(file_path, "w", encoding="utf-8") as file:
+        file.write(incomplete_task_document)
+    print(f"Written incomplete tasks to {file_path}")
+
+
+def create_file_for_day(
+    notes_home: str, incomplete_tasks: set, config: NoteManagerConfig, file_date: date
+) -> None:
+    pass
+
+
+def create_this_weeks_files(
+    notes_home: str, incomplete_tasks: set, config: NoteManagerConfig, today_date: date
+) -> None:
+    """
+    Creates files for the current week in the notes home directory.
+
+    Args:
+        notes_home (str): The path to the notes home directory.
+        incomplete_tasks (set): Set of incomplete tasks.
+        config (NoteManagerConfig): The configuration object.
+        today_date (date): Today's date as a datetime.date object.
+    """
+    for i in range(7):
+        day = today_date + timedelta(days=i)
+        file_name = day.strftime("%Y-%m-%d.md")
+        file_path = os.path.join(notes_home, file_name)
+        if i == 0 and os.path.exists(file_path):
+            continue
+        create_file_for_day(notes_home, incomplete_tasks, config, day)
 
 
 def main() -> None:
@@ -271,6 +308,10 @@ def main() -> None:
         print(f"Parsed configuration: {parsed_config}")
         directory_check(notes_home)
         incomplete_tasks: set[str] = process_old(note_files, notes_home, date.today())
+        write_incomplete_tasks_to_file(incomplete_tasks, notes_home, date.today())
+        create_this_weeks_files(
+            notes_home, incomplete_tasks, parsed_config, date.today()
+        )
 
 
 if __name__ == "__main__":
