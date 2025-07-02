@@ -192,7 +192,7 @@ def test_output_tasks_for_day():
         sections=[],
     )
     tasks = note_manager.output_tasks_for_day(sample_config, "2025-01-01")
-    assert tasks == ["[ ] Task 1", "[ ] Task 3"]
+    assert tasks == ["- [ ] Task 1", "- [ ] Task 3"]
 
 
 def test_archive_and_backup_directories_exist():
@@ -271,17 +271,47 @@ def test_process_old_notes():
         with mock.patch(
             "note_manager.process_single_file_before_archiving"
         ) as mock_process_single_file:
-            note_manager.process_old(
-                note_files, "/doesnt/matter/for/test", date(2025, 1, 3)
+            with mock.patch("note_manager.process_incomplete_task_file") as mock_process_incomplete_task_file:
+                note_manager.process_old(
+                    note_files, "/doesnt/matter/for/test", date(2025, 1, 3)
+                )
+                assert mock_rename.call_count == 2
+                assert mock_rename.call_args_list[0][0][0] == os.path.join(
+                    "/doesnt/matter/for/test", "2025-01-01.md"
+                )
+                assert mock_rename.call_args_list[1][0][0] == os.path.join(
+                    "/doesnt/matter/for/test", "2025-01-02.md"
+                )
+                assert mock_process_single_file.call_count == 2
+                assert mock_process_incomplete_task_file.call_count == 1
+
+def test_process_incomplete_task_file():
+    """
+    Test that process_incomplete_task_file processes the incomplete tasks file correctly.
+    """
+    with mock.patch("os.path.exists", return_value=False) as mock_exists:
+        incomplete_tasks = note_manager.process_incomplete_task_file(
+            "/doesnt/matter/for/test/"
+        )
+        mock_exists.assert_called_once_with(
+            "/doesnt/matter/for/test/incomplete_tasks.md"
+        )
+        assert incomplete_tasks == set()  # No tasks should be returned if file doesn't exist
+    
+    sample_incomplete_tasks = """- [ ] Task 1
+- [x] Task 2
+- [ ] Task 3
+"""
+
+    with mock.patch("os.path.exists", return_value=True):
+        with mock.patch("builtins.open", mock.mock_open(read_data=sample_incomplete_tasks)) as mock_file_open:
+            incomplete_tasks = note_manager.process_incomplete_task_file(
+                "/doesnt/matter/for/test/"
             )
-            assert mock_rename.call_count == 2
-            assert mock_rename.call_args_list[0][0][0] == os.path.join(
-                "/doesnt/matter/for/test", "2025-01-01.md"
+            mock_file_open.assert_called_once_with(
+                "/doesnt/matter/for/test/incomplete_tasks.md", "r", encoding="utf-8"
             )
-            assert mock_rename.call_args_list[1][0][0] == os.path.join(
-                "/doesnt/matter/for/test", "2025-01-02.md"
-            )
-            assert mock_process_single_file.call_count == 2
+            assert incomplete_tasks == {"Task 1", "Task 3"}
 
 
 def test_process_old_notes_fails_on_exception():
@@ -360,16 +390,35 @@ def test_create_file_for_day():
     Test that create_file_for_day creates a file for the specified day.
     """
     fake_config = NoteManagerConfig(
-        task_list_for_day=[],
-        sections=[],
+        task_list_for_day=[
+            (["2025-02-27"], "Walk the dog"),
+            (["2025-01-02"], "Clean the house"),
+            (["2025-02-27", "2025-01-31"], "Buy groceries"),
+        ],
+        sections=[
+            ("# Diary", "#thoughtoftheday (delete_if_not_entered)\n"),
+            ("# Another section", "\n"),
+            ("# Tasks", "\n"),
+        ],
     )
     with mock.patch("builtins.open", mock.mock_open()) as mock_file_open:
         note_manager.create_file_for_day(
-            "/doesnt/matter/for/test", set(), fake_config, date(2025, 2, 27)
+            "/doesnt/matter/for/test", {"a", "b", "c", "d"}, fake_config, date(2025, 2, 27)
         )
         mock_file_open.assert_called_once_with(
             "/doesnt/matter/for/test/2025-02-27.md", "w", encoding="utf-8"
         )
         mock_file_open().write.assert_called_once_with(
-            "# 27/02/2025\n\n# Tasks\n\n# Diary\n\n# Another section\n"
+            """
+# Diary
+#thoughtoftheday (delete_if_not_entered)
+
+# Another section
+
+
+# Tasks
+At the last calculation there were 4 [[incomplete tasks]] for today.
+- [ ] Walk the dog
+- [ ] Buy groceries
+"""
         )

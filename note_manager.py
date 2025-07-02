@@ -13,6 +13,7 @@ from note_data_structures import Note, NoteManagerConfig
 
 ARCHIVE_HOME = "archive"
 BACKUP_HOME = "backup"
+INCOMPLETE_TASKS_FILENAME = "incomplete_tasks.md"
 
 
 class CurrentSection(StrEnum):
@@ -168,7 +169,7 @@ def output_tasks_for_day(config: NoteManagerConfig, day: str) -> list[str]:
     tasks_for_day = []
     for task_dates, task in config.task_list_for_day:
         if day in task_dates:
-            tasks_for_day.append("[ ] " + task)
+            tasks_for_day.append("- [ ] " + task)
     return tasks_for_day
 
 
@@ -184,6 +185,20 @@ def directory_check(notes_home: str) -> None:
         if not os.path.exists(subdir_path):
             print(f"Creating directory: {subdir_path}")
             os.makedirs(subdir_path)
+
+
+def get_task_if_task_line(line: str) -> str | None:
+    """
+    Checks if the line is a task line and returns the task if it is.
+    Args:
+        line (str): The line to check.
+    Returns:
+        str | None: The task if it is a task line, None otherwise.
+    """
+    match = re.match(r"^(\*|-)\s\[\s\]\s(.+)", line)
+    if match:
+        return match.group(2).strip()
+    return None
 
 
 def process_single_file_before_archiving(note_file: str, notes_home: str) -> set[str]:
@@ -215,6 +230,27 @@ def process_single_file_before_archiving(note_file: str, notes_home: str) -> set
     return incomplete_tasks
 
 
+def process_incomplete_task_file(notes_home: str) -> set[str]:
+    """Processes the incomplete tasks file, extracting tasks that have not been completed.
+    Args:
+        notes_home (str): The path to the notes home directory.
+    Returns:
+        set[str]: A set of tasks that have not been completed.
+    """
+    if not os.path.exists(os.path.join(notes_home, "incomplete_tasks.md")):
+        return set()
+    with open(
+        os.path.join(notes_home, "incomplete_tasks.md"), "r", encoding="utf-8"
+    ) as file:
+        incomplete_tasks = set()
+        for line in file:
+            line = line.strip()
+            task = get_task_if_task_line(line)
+            if task:
+                incomplete_tasks.add(task)
+    return incomplete_tasks
+
+
 def process_old(
     note_files: list[str],
     notes_home: str,
@@ -242,6 +278,7 @@ def process_old(
             except Exception as e:  # pylint: disable=broad-except
                 print(f"Error processing file {note_file}: {e}")
                 sys.exit(1)
+    incomplete_tasks.update(process_incomplete_task_file(notes_home))
     return incomplete_tasks
 
 
@@ -258,7 +295,7 @@ def write_incomplete_tasks_to_file(
         notes_home (str): The path to the notes home directory.
         today_date (date): Today's date as a datetime.date object.
     """
-    file_path = os.path.join(notes_home, "incomplete_tasks.md")
+    file_path = os.path.join(notes_home, INCOMPLETE_TASKS_FILENAME)
     incomplete_task_document = f"Incomplete task list updated on {today_date.day}/{today_date.month}/{today_date.year}:\n\n"
     if incomplete_tasks:
         for task in sorted(incomplete_tasks):
@@ -273,7 +310,28 @@ def write_incomplete_tasks_to_file(
 def create_file_for_day(
     notes_home: str, incomplete_tasks: set, config: NoteManagerConfig, file_date: date
 ) -> None:
-    pass
+    with open(
+        os.path.join(notes_home, file_date.strftime("%Y-%m-%d.md")),
+        "w",
+        encoding="utf-8",
+    ) as file:
+        daily_notes_content = "\n"
+        for section_name, section_content in config.sections:
+            daily_notes_content += f"{section_name}\n"
+            if section_name.lower().find("tasks") != -1:
+                daily_notes_content += f"At the last calculation there were {len(incomplete_tasks)} [[incomplete tasks]] for today.\n"
+                tasks_for_day = output_tasks_for_day(
+                    config, file_date.strftime("%Y-%m-%d")
+                )
+                if tasks_for_day:
+                    daily_notes_content += "\n".join(tasks_for_day) + "\n"
+                else:
+                    daily_notes_content += "- [ ] No tasks for today\n"
+            elif section_content:
+                daily_notes_content += section_content + "\n"
+
+        contents = daily_notes_content
+        file.write(contents)
 
 
 def create_this_weeks_files(
