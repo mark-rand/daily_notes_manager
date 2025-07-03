@@ -134,6 +134,8 @@ def test_get_days_for_pattern():
     assert note_manager.get_days_for_pattern(
         "sat,21,0621,mon,wed", date(2025, 6, 21)
     ) == ["2025-06-21", "2025-06-23", "2025-06-25"]
+    assert note_manager.get_days_for_pattern("thu", date(2025, 7, 3)) == [
+        "2025-07-03",]
 
 
 def test_config_parsing():
