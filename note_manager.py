@@ -13,7 +13,7 @@ from note_data_structures import Note, NoteManagerConfig
 
 ARCHIVE_HOME = "archive"
 BACKUP_HOME = "backup"
-INCOMPLETE_TASKS_FILENAME = "incomplete_tasks.md"
+INCOMPLETE_TASKS_FILENAME = "incomplete tasks.md"
 
 
 class CurrentSection(StrEnum):
@@ -237,10 +237,10 @@ def process_incomplete_task_file(notes_home: str) -> set[str]:
     Returns:
         set[str]: A set of tasks that have not been completed.
     """
-    if not os.path.exists(os.path.join(notes_home, "incomplete_tasks.md")):
+    if not os.path.exists(os.path.join(notes_home, INCOMPLETE_TASKS_FILENAME)):
         return set()
     with open(
-        os.path.join(notes_home, "incomplete_tasks.md"), "r", encoding="utf-8"
+        os.path.join(notes_home, INCOMPLETE_TASKS_FILENAME), "r", encoding="utf-8"
     ) as file:
         incomplete_tasks = set()
         for line in file:

@@ -296,7 +296,7 @@ def test_process_incomplete_task_file():
             "/doesnt/matter/for/test/"
         )
         mock_exists.assert_called_once_with(
-            "/doesnt/matter/for/test/incomplete_tasks.md"
+            "/doesnt/matter/for/test/incomplete tasks.md"
         )
         assert incomplete_tasks == set()  # No tasks should be returned if file doesn't exist
     
@@ -311,7 +311,7 @@ def test_process_incomplete_task_file():
                 "/doesnt/matter/for/test/"
             )
             mock_file_open.assert_called_once_with(
-                "/doesnt/matter/for/test/incomplete_tasks.md", "r", encoding="utf-8"
+                "/doesnt/matter/for/test/incomplete tasks.md", "r", encoding="utf-8"
             )
             assert incomplete_tasks == {"Task 1", "Task 3"}
 
@@ -345,7 +345,7 @@ def test_incomplete_tasks_are_written_to_file():
             incomplete_tasks, "/doesnt/matter/for/test/", date(2025, 6, 7)
         )
         mock_file_open.assert_called_once_with(
-            "/doesnt/matter/for/test/incomplete_tasks.md", "w", encoding="utf-8"
+            "/doesnt/matter/for/test/incomplete tasks.md", "w", encoding="utf-8"
         )
         mock_file_open().write.assert_called_once_with(
             """Incomplete task list updated on 7/6/2025:
