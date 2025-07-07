@@ -367,6 +367,9 @@ def test_countdown_functionality():
         date(2025, 1, 1), date(2025, 12, 31)
     )
     assert in_days == 364
+    assert note_manager.countdown(
+        date(2025, 12, 25), date(2025, 12, 25)
+    ) == 0
 
 
 def test_create_this_weeks_files():
