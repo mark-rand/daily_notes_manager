@@ -355,6 +355,19 @@ def test_incomplete_tasks_are_written_to_file():
 """
         )
 
+def test_countdown_functionality():
+    """
+    Test that the countdown functionality works correctly.
+    """
+    in_days = note_manager.countdown(
+        date(2025, 1, 1), date(2025, 1, 3)
+    )
+    assert in_days == 2
+    in_days = note_manager.countdown(
+        date(2025, 1, 1), date(2025, 12, 31)
+    )
+    assert in_days == 364
+
 
 def test_create_this_weeks_files():
     """
@@ -398,7 +411,11 @@ def test_create_file_for_day():
             (["2025-02-27", "2025-01-31"], "Buy groceries"),
         ],
         sections=[
-            ("# Diary", "#thoughtoftheday (delete_if_not_entered)\n"),
+            ("# Diary", "#thoughtoftheday (delete_if_not_entered)\n\n"),
+            ("# Holiday countdown", """
+countdown:2025-08-01,Holiday is in
+countdown:2025-02-28,Birthday is in
+"""),
             ("# Another section", "\n"),
             ("# Tasks", "\n"),
         ],
@@ -415,11 +432,16 @@ def test_create_file_for_day():
 # Diary
 #thoughtoftheday (delete_if_not_entered)
 
+# Holiday countdown
+Holiday is in 155 days
+Birthday is in 1 day
+
+
 # Another section
 
 
 # Tasks
-At the last calculation there were 4 [[incomplete tasks]] for today.
+At the last calculation there were 4 [[incomplete tasks]].
 - [ ] Walk the dog
 - [ ] Buy groceries
 """

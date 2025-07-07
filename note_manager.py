@@ -319,7 +319,7 @@ def create_file_for_day(
         for section_name, section_content in config.sections:
             daily_notes_content += f"{section_name}\n"
             if section_name.lower().find("tasks") != -1:
-                daily_notes_content += f"At the last calculation there were {len(incomplete_tasks)} [[incomplete tasks]] for today.\n"
+                daily_notes_content += f"At the last calculation there were {len(incomplete_tasks)} [[incomplete tasks]].\n"
                 tasks_for_day = output_tasks_for_day(
                     config, file_date.strftime("%Y-%m-%d")
                 )
@@ -328,11 +328,41 @@ def create_file_for_day(
                 else:
                     daily_notes_content += "- [ ] No tasks for today\n"
             elif section_content:
-                daily_notes_content += section_content + "\n"
+                for line in section_content.split("\n"):
+                    if line.startswith("countdown:"):
+                        # Extract the countdown date from the section content
+                        line = line[10:]
+                        match = re.search(r"(\d{4}-\d{2}-\d{2}),(.*)", line)
+                        if match:
+                            countdown_name = match.group(2).strip()
+                            countdown_date = date.fromisoformat(match.group(1))
+                            days_left = countdown(file_date, countdown_date)
+                            daily_notes_content += (
+                                f"{countdown_name} {days_left} {'days' if days_left != 1 else 'day'}\n"
+                            )
+                    else:
+                        # Add other lines as they are
+                        daily_notes_content += line
+                daily_notes_content += "\n\n"
 
         contents = daily_notes_content
         file.write(contents)
 
+def countdown(
+    start_date: date, end_date: date
+) -> int:
+    """
+    Counts down the days from start_date to end_date.
+
+    Args:
+        start_date (date): The date to start the countdown from.
+        end_date (date): The date to end the countdown at.
+
+    Returns:
+        tuple[int, str]: A tuple containing the number of days and a string representation.
+    """
+    delta = end_date - start_date
+    return delta.days
 
 def create_this_weeks_files(
     notes_home: str, incomplete_tasks: set, config: NoteManagerConfig, today_date: date
