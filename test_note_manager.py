@@ -9,7 +9,7 @@ from unittest import mock
 import pytest
 import note_manager
 from note_manager import get_files, parse_config, process_args
-from note_data_structures import Note, NoteManagerConfig
+from note_data_structures import NoteManagerConfig
 
 
 def test_process_args_checks_for_notes_home(capsys):
@@ -135,7 +135,21 @@ def test_get_days_for_pattern():
         "sat,21,0621,mon,wed", date(2025, 6, 21)
     ) == ["2025-06-21", "2025-06-23", "2025-06-25"]
     assert note_manager.get_days_for_pattern("thu", date(2025, 7, 3)) == [
-        "2025-07-03",]
+        "2025-07-03",
+    ]
+
+
+def test_print_day_of_week():
+    """
+    Test that the print_day_of_week function outputs the correct day of the week.
+    """
+    assert note_manager.print_day_of_week(date(2025, 1, 1)) == "Wednesday"
+    assert note_manager.print_day_of_week(date(2025, 1, 2)) == "Thursday"
+    assert note_manager.print_day_of_week(date(2025, 1, 3)) == "Friday"
+    assert note_manager.print_day_of_week(date(2025, 1, 4)) == "Saturday"
+    assert note_manager.print_day_of_week(date(2025, 1, 5)) == "Sunday"
+    assert note_manager.print_day_of_week(date(2025, 1, 6)) == "Monday"
+    assert note_manager.print_day_of_week(date(2025, 1, 7)) == "Tuesday"
 
 
 def test_config_parsing():
@@ -143,6 +157,7 @@ def test_config_parsing():
     Test that the config file is parsed correctly.
     """
     sample_config = """
+The first section is just blank
 # Diary
 Write about my day here
 # Another section
@@ -175,6 +190,7 @@ mon:Put out the: bins
             ),
         ]
         assert parsed_config.sections == [
+            ("", "The first section is just blank"),
             ("# Diary", "Write about my day here"),
             ("# Another section", "Write something else here"),
             ("# Tasks", ""),
@@ -273,7 +289,9 @@ def test_process_old_notes():
         with mock.patch(
             "note_manager.process_single_file_before_archiving"
         ) as mock_process_single_file:
-            with mock.patch("note_manager.process_incomplete_task_file") as mock_process_incomplete_task_file:
+            with mock.patch(
+                "note_manager.process_incomplete_task_file"
+            ) as mock_process_incomplete_task_file:
                 note_manager.process_old(
                     note_files, "/doesnt/matter/for/test", date(2025, 1, 3)
                 )
@@ -287,6 +305,7 @@ def test_process_old_notes():
                 assert mock_process_single_file.call_count == 2
                 assert mock_process_incomplete_task_file.call_count == 1
 
+
 def test_process_incomplete_task_file():
     """
     Test that process_incomplete_task_file processes the incomplete tasks file correctly.
@@ -298,15 +317,19 @@ def test_process_incomplete_task_file():
         mock_exists.assert_called_once_with(
             "/doesnt/matter/for/test/incomplete tasks.md"
         )
-        assert incomplete_tasks == set()  # No tasks should be returned if file doesn't exist
-    
+        assert (
+            incomplete_tasks == set()
+        )  # No tasks should be returned if file doesn't exist
+
     sample_incomplete_tasks = """- [ ] Task 1
 - [x] Task 2
 - [ ] Task 3
 """
 
     with mock.patch("os.path.exists", return_value=True):
-        with mock.patch("builtins.open", mock.mock_open(read_data=sample_incomplete_tasks)) as mock_file_open:
+        with mock.patch(
+            "builtins.open", mock.mock_open(read_data=sample_incomplete_tasks)
+        ) as mock_file_open:
             incomplete_tasks = note_manager.process_incomplete_task_file(
                 "/doesnt/matter/for/test/"
             )
@@ -355,21 +378,16 @@ def test_incomplete_tasks_are_written_to_file():
 """
         )
 
+
 def test_countdown_functionality():
     """
     Test that the countdown functionality works correctly.
     """
-    in_days = note_manager.countdown(
-        date(2025, 1, 1), date(2025, 1, 3)
-    )
+    in_days = note_manager.countdown(date(2025, 1, 1), date(2025, 1, 3))
     assert in_days == 2
-    in_days = note_manager.countdown(
-        date(2025, 1, 1), date(2025, 12, 31)
-    )
+    in_days = note_manager.countdown(date(2025, 1, 1), date(2025, 12, 31))
     assert in_days == 364
-    assert note_manager.countdown(
-        date(2025, 12, 25), date(2025, 12, 25)
-    ) == 0
+    assert note_manager.countdown(date(2025, 12, 25), date(2025, 12, 25)) == 0
 
 
 def test_create_this_weeks_files():
@@ -403,6 +421,7 @@ def test_create_this_weeks_files():
             )  # We don't create today's file if it already exists
             assert mock_file_exists.assert_called_once
 
+
 def test_create_file_for_day():
     """
     Test that create_file_for_day creates a file for the specified day.
@@ -415,24 +434,29 @@ def test_create_file_for_day():
         ],
         sections=[
             ("# Diary", "#thoughtoftheday (delete_if_not_entered)\n\n"),
-            ("# Holiday countdown", """
+            (
+                "# Holiday countdown",
+                """
 countdown:2025-08-01,Holiday is in
 countdown:2025-02-28,Birthday is in
-"""),
-            ("# Another section", "\n"),
+""",
+            ),
+            ("# Another section", "Happy %dow%\n"),
             ("# Tasks", "\n"),
         ],
     )
     with mock.patch("builtins.open", mock.mock_open()) as mock_file_open:
         note_manager.create_file_for_day(
-            "/doesnt/matter/for/test", {"a", "b", "c", "d"}, fake_config, date(2025, 2, 27)
+            "/doesnt/matter/for/test",
+            {"a", "b", "c", "d"},
+            fake_config,
+            date(2025, 2, 27),
         )
         mock_file_open.assert_called_once_with(
             "/doesnt/matter/for/test/2025-02-27.md", "w", encoding="utf-8"
         )
         mock_file_open().write.assert_called_once_with(
-            """
-# Diary
+            """# Diary
 #thoughtoftheday (delete_if_not_entered)
 
 # Holiday countdown
@@ -441,7 +465,7 @@ Birthday is in 1 day
 
 
 # Another section
-
+Happy Thursday
 
 # Tasks
 At the last calculation there were 4 [[incomplete tasks]].

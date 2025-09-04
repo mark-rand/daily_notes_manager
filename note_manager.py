@@ -61,6 +61,13 @@ def get_files(notes_directory: str) -> tuple[str, list[str]]:
     return config_path, filtered_note_files
 
 
+def print_day_of_week(date: date) -> str:
+    """
+    Returns the day of the week for the given date.
+    """
+    return date.strftime("%A")
+
+
 def get_days_for_pattern(pattern: str, today_date: date) -> list[str]:
     """
     Returns a list of dates in YYYY-MM-DD format for the given pattern.
@@ -121,17 +128,13 @@ def parse_config(config_file_location: str, today_date: date) -> NoteManagerConf
         sections: list[tuple[str, str]] = []
         current_section_name = ""
         current_section_content = []
-        processed_first_section = False
         for line in file:
             line = line.strip() if line else ""
             if line:
                 if line.startswith("#"):
-                    if processed_first_section:
-                        sections.append(
-                            (current_section_name, "\n".join(current_section_content))
-                        )
-                    else:
-                        processed_first_section = True
+                    sections.append(
+                        (current_section_name, "\n".join(current_section_content))
+                    )
                     current_section_name = line
                     current_section_content = []
                     current_section = CurrentSection.OTHER
@@ -310,14 +313,18 @@ def write_incomplete_tasks_to_file(
 def create_file_for_day(
     notes_home: str, incomplete_tasks: set, config: NoteManagerConfig, file_date: date
 ) -> None:
+    """
+    Processes the config for the file and writes it out
+    """
     with open(
         os.path.join(notes_home, file_date.strftime("%Y-%m-%d.md")),
         "w",
         encoding="utf-8",
     ) as file:
-        daily_notes_content = "\n"
+        daily_notes_content = ""
         for section_name, section_content in config.sections:
-            daily_notes_content += f"{section_name}\n"
+            if section_name:
+                daily_notes_content += f"{section_name}\n"
             if section_name.lower().find("tasks") != -1:
                 daily_notes_content += f"At the last calculation there were {len(incomplete_tasks)} [[incomplete tasks]].\n"
                 tasks_for_day = output_tasks_for_day(
@@ -329,6 +336,8 @@ def create_file_for_day(
                     daily_notes_content += "- [ ] No tasks for today\n"
             elif section_content:
                 for line in section_content.split("\n"):
+                    if line.find("%dow%") != -1:
+                        line = line.replace("%dow%", print_day_of_week(file_date))
                     if line.startswith("countdown:"):
                         # Extract the countdown date from the section content
                         line = line[10:]
