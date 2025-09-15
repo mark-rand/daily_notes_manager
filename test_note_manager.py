@@ -441,7 +441,7 @@ countdown:2025-08-01,Holiday is in
 countdown:2025-02-28,Birthday is in
 """,
             ),
-            ("# Another section", "Happy %dow%\n"),
+            ("# Another section", "<br/>Happy %dow%\n"),
             ("# Tasks", "\n"),
         ],
     )
@@ -465,6 +465,7 @@ Birthday is in 1 day
 
 
 # Another section
+
 Happy Thursday
 
 # Tasks
