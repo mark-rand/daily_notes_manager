@@ -354,7 +354,7 @@ def create_file_for_day(
                         daily_notes_content += line
                 daily_notes_content += "\n\n"
 
-        contents = daily_notes_content
+        contents = daily_notes_content.replace("<br/>", "\n")
         file.write(contents)
 
 def countdown(
